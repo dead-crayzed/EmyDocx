@@ -2,6 +2,11 @@
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Cm, Pt
 
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+
+from emydocx.converter.numbering import NumberingManager
+
 from emydocx.converter.colors import hex_to_rgb
 from emydocx.converter.legacy_inline import add_inline_regex
 from emydocx.converter.runs import add_run, apply_run_format
@@ -15,6 +20,7 @@ class BlockRenderer:
     def __init__(self, document, settings: dict):
         self.document = document
         self.settings = settings
+        self.numbering = NumberingManager(document)
 
     # ---------- public ----------
 
@@ -103,6 +109,64 @@ class BlockRenderer:
             pos = match.end()
         if pos < len(text):
             self._add_run(paragraph, text[pos:], bold=bold, italic=italic)
+
+    def _add_list(self, block, list_level: int = 0, num_id=None) -> None:
+        ordered = bool(block.get("attrs", {}).get("ordered", False))
+
+        if num_id is None:
+            num_id = (
+                self.numbering.get_number_num_id() if ordered
+                else self.numbering.get_bullet_num_id()
+            )
+
+        for item in block.get("children", []):
+            for item_block in item.get("children", []):
+                item_kind = item_block.get("type")
+
+                if item_kind in ("block_text", "paragraph"):
+                    paragraph = self.document.add_paragraph()
+                    checked = (
+                        item_block.get("attrs", {}).get("checked")
+                        if "checked" in item_block.get("attrs", {})
+                        else item.get("attrs", {}).get("checked")
+                    )
+                    if checked is not None:
+                        # Чек-лист: свой отступ, маркер — символ ☑/☐
+                        paragraph.paragraph_format.left_indent = Cm(0.6 + 0.45 * list_level)
+                        paragraph.paragraph_format.first_line_indent = Cm(-0.5)
+                        prefix = paragraph.add_run("☑ " if checked else "☐ ")
+                        apply_run_format(prefix, self.settings)
+                    else:
+                        self._apply_numbering(paragraph, num_id, list_level)
+                    self._inline_into(paragraph, item_block.get("children", []))
+
+                elif item_kind == "list":
+                    self._add_list(item_block, list_level + 1, num_id)
+
+                elif item_kind == "block_code":
+                    paragraph = self.document.add_paragraph()
+                    self._apply_numbering(paragraph, num_id, list_level)
+                    code = clean_xml_string(item_block.get("raw", "").rstrip("\n"))
+                    run = self._add_run(paragraph, code)
+                    run.font.name = "Consolas"
+
+    def _apply_numbering(self, paragraph, num_id: int, ilvl: int) -> None:
+        """Проставляет w:numPr (numId + ilvl) на параграф."""
+        pPr = paragraph._element.get_or_add_pPr()
+        for existing in pPr.findall(qn("w:numPr")):
+            pPr.remove(existing)
+
+        num_pr = OxmlElement("w:numPr")
+
+        ilvl_el = OxmlElement("w:ilvl")
+        ilvl_el.set(qn("w:val"), str(ilvl))
+        num_pr.append(ilvl_el)
+
+        num_id_el = OxmlElement("w:numId")
+        num_id_el.set(qn("w:val"), str(num_id))
+        num_pr.append(num_id_el)
+
+        pPr.append(num_pr)
 
     def _inline_into(self, paragraph, children, base_bold=False, base_italic=False) -> None:
         for child in children or []:
@@ -256,36 +320,7 @@ class BlockRenderer:
                     paragraph.paragraph_format.left_indent = Cm(0.7)
 
             elif kind == "list":
-                ordered = bool(block.get("attrs", {}).get("ordered", False))
-                level = min(list_level + 1, 3)
-                base = "List Number" if ordered else "List Bullet"
-                style = base if level == 1 else f"{base} {level}"
-                for item in children:
-                    paragraph = document.add_paragraph(style=style)
-                    paragraph.paragraph_format.left_indent = Cm(0.6 + 0.45 * list_level)
-                    first_block_written = False
-                    for item_block in item.get("children", []):
-                        item_kind = item_block.get("type")
-                        if item_kind in ("block_text", "paragraph"):
-                            if first_block_written:
-                                paragraph = document.add_paragraph(style=style)
-                                paragraph.paragraph_format.left_indent = Cm(0.6 + 0.45 * list_level)
-                            checked = (
-                                item_block.get("attrs", {}).get("checked")
-                                if "checked" in item_block.get("attrs", {})
-                                else item.get("attrs", {}).get("checked")
-                            )
-                            if checked is not None:
-                                prefix_run = paragraph.add_run("☑ " if checked else "☐ ")
-                                apply_run_format(prefix_run, settings)
-                            self._inline_into(paragraph, item_block.get("children", []))
-                            first_block_written = True
-                        elif item_kind == "list":
-                            self._add_blocks([item_block], list_level + 1)
-                        elif item_kind == "block_code":
-                            code = clean_xml_string(item_block.get("raw", "").rstrip("\n"))
-                            run = self._add_run(document.add_paragraph(), code)
-                            run.font.name = "Consolas"
+                self._add_list(block, list_level=0)
 
             elif kind == "block_code":
                 code = clean_xml_string(block.get("raw", "").rstrip("\n"))

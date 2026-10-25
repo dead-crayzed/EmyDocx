@@ -1,9 +1,8 @@
 from pathlib import Path
-import json
-
 import flet as ft
 
 from emydocx.converter import markdown_to_docx
+from emydocx.template_service import load_templates
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -26,35 +25,6 @@ DEFAULT_MARKDOWN = """# EmyDocx — мой первый документ
 """
 
 
-def load_templates():
-    try:
-        data = json.loads(TEMPLATES_FILE.read_text(encoding="utf-8"))
-        if isinstance(data, dict) and data:
-            return data
-    except (OSError, json.JSONDecodeError):
-        pass
-
-    return {
-        "Классический": {
-            "font_name": "Arial", "body_size": 12, "h1_size": 20,
-            "h2_size": 16, "h3_size": 14, "body_color": "#202124",
-            "heading_color": "#172554", "margin_cm": 2.0,
-            "line_spacing": 1.15,
-        },
-        "Академический": {
-            "font_name": "Times New Roman", "body_size": 14, "h1_size": 16,
-            "h2_size": 14, "h3_size": 14, "body_color": "#000000",
-            "heading_color": "#000000", "margin_cm": 2.0,
-            "line_spacing": 1.5,
-        },
-        "Минималистичный": {
-            "font_name": "Arial", "body_size": 11, "h1_size": 22,
-            "h2_size": 17, "h3_size": 14, "body_color": "#30343B",
-            "heading_color": "#2563EB", "margin_cm": 1.8,
-            "line_spacing": 1.15,
-        },
-    }
-
 
 def valid_hex(value, fallback):
     value = (value or "").strip().lstrip("#")
@@ -74,7 +44,7 @@ def main(page: ft.Page):
     page.window.min_width = 900
     page.window.min_height = 620
 
-    templates = load_templates()
+    templates = load_templates(TEMPLATES_FILE)
     template_names = list(templates.keys())
     state = {"path": None}
 
@@ -103,7 +73,12 @@ def main(page: ft.Page):
         value=template_names[0] if template_names else None,
         dense=True,
         text_size=13,
-        border_color="#334155",
+        border=ft.OutlineInputBorder(
+            side=ft.BorderSide(
+                color="#334155",
+                width=1,
+            ),
+        ),
     )
 
     font_dropdown = ft.Dropdown(
@@ -115,7 +90,12 @@ def main(page: ft.Page):
         value="Arial",
         dense=True,
         text_size=13,
-        border_color="#334155",
+        border=ft.OutlinedBorder(
+            side=ft.BorderSide(
+                color="#334155",
+                width=1,
+            ),
+        ),
     )
 
     body_size = ft.TextField(label="Основной текст, pt", value="12", dense=True)
@@ -131,7 +111,12 @@ def main(page: ft.Page):
         value="1.15",
         dense=True,
         text_size=13,
-        border_color="#334155",
+        border=ft.OutlinedBorder(
+            side=ft.BorderSide(
+                color="#334155",
+                width=1,
+            ),
+        ),
     )
 
     file_picker = ft.FilePicker()

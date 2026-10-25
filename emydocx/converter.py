@@ -139,41 +139,103 @@ def markdown_to_docx(markdown_text, settings):
                 parts.append(plain_text(child.get("children", [])))
         return clean_xml_string("".join(parts))
 
-    def inline_into(paragraph, children):
+
+    def inline_into(paragraph, children, base_bold=False, base_italic=False):
         for child in children or []:
             kind = child.get("type")
             raw = child.get("raw", "")
 
             if kind == "text":
-                _add_inline(paragraph, raw, settings)
+                _add_run(
+                    paragraph,
+                    raw,
+                    settings,
+                    bold=base_bold,
+                    italic=base_italic,
+                )
+
             elif kind == "strong":
-                _add_run(paragraph, plain_text(child.get("children")), settings, bold=True)
+                inline_into(
+                    paragraph,
+                    child.get("children", []),
+                    base_bold=True,
+                    base_italic=base_italic,
+                )
+
             elif kind == "emphasis":
-                _add_run(paragraph, plain_text(child.get("children")), settings, italic=True)
+                inline_into(
+                    paragraph,
+                    child.get("children", []),
+                    base_bold=base_bold,
+                    base_italic=True,
+                )
+
             elif kind == "codespan":
-                run = _add_run(paragraph, raw, settings)
+                run = _add_run(
+                    paragraph,
+                    raw,
+                    settings,
+                    bold=base_bold,
+                    italic=base_italic,
+                )
                 run.font.name = "Consolas"
+
             elif kind == "link":
                 label = plain_text(child.get("children"))
                 url = child.get("attrs", {}).get("url", "")
-                run = _add_run(paragraph, f"{label} ({url})" if url else label, settings)
+                run = _add_run(
+                    paragraph,
+                    f"{label} ({url})" if url else label,
+                    settings,
+                    bold=base_bold,
+                    italic=base_italic,
+                )
                 run.underline = True
+
             elif kind in ("softbreak", "linebreak"):
                 paragraph.add_run("\n")
+
             elif kind == "image":
                 alt = child.get("attrs", {}).get("alt", "Изображение")
-                _add_run(paragraph, f"[{alt}]", settings)
+                _add_run(
+                    paragraph,
+                    f"[{alt}]",
+                    settings,
+                    bold=base_bold,
+                    italic=base_italic,
+                )
+
             elif kind == "strikethrough":
-                run = _add_run(paragraph, plain_text(child.get("children")), settings)
-                run.font.strike = True
+                before = len(paragraph.runs)
+                inline_into(
+                    paragraph,
+                    child.get("children", []),
+                    base_bold=base_bold,
+                    base_italic=base_italic,
+                )
+                for run in paragraph.runs[before:]:
+                    run.font.strike = True
+
             elif kind == "inline_math":
-                run = _add_run(paragraph, raw, settings)
+                run = _add_run(
+                    paragraph,
+                    raw,
+                    settings,
+                    bold=base_bold,
+                    italic=True,
+                )
                 run.font.name = "Cambria Math"
-                run.italic = True
+
             else:
                 text = plain_text([child])
                 if text:
-                    _add_run(paragraph, text, settings)
+                    _add_run(
+                        paragraph,
+                        text,
+                        settings,
+                        bold=base_bold,
+                        italic=base_italic,
+                    )
 
     def add_table(block):
         """Render Mistune's table AST while keeping the header as one row."""
@@ -256,7 +318,8 @@ def markdown_to_docx(markdown_text, settings):
 
             if kind == "heading":
                 level = int(block.get("attrs", {}).get("level", 1))
-                paragraph = document.add_paragraph()
+                level = min(max(level, 1), 9)
+                paragraph = document.add_paragraph(style=f"Heading {level}")
                 paragraph.paragraph_format.keep_with_next = True
                 paragraph.paragraph_format.space_before = Pt(12 if level == 1 else 8)
                 paragraph.paragraph_format.space_after = Pt(5)

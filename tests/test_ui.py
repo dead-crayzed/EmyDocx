@@ -1,6 +1,5 @@
 """UI-компоненты. Без реальной Flet-страницы — только объектные свойства."""
 import flet as ft
-import pytest
 
 from emydocx.ui.theme import Colors
 from emydocx.ui.components.common import divider, make_button, section_title
@@ -113,7 +112,7 @@ def test_settings_panel_callback_fires():
 
 def test_settings_panel_no_callback_on_same():
     calls = []
-    panel = SettingsPanel(
+    SettingsPanel(
         templates=_sample_templates(),
         on_template_applied=calls.append,
     )

@@ -2,9 +2,9 @@
 
 Встроенный шаблон python-docx для стилей "List Bullet 2/3" часто переиспользует
 один и тот же маркер •. Здесь мы создаём свои abstractNum/num с разными
-маркерами по уровням:
-    Bullets: • (ilvl 0), ◦ (ilvl 1), ▪ (ilvl 2)
-    Numbers: 1. (ilvl 0), a. (ilvl 1), i. (ilvl 2)
+маркерами по уровням (повторяются до предельных 9 уровней DOCX):
+    Bullets: ●, ○, ■
+    Numbers: 1., a., i.
 """
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -85,7 +85,8 @@ class NumberingManager:
         # Точные Unicode-символы, которые использует Google Docs и современный Word
         bullet_chars = ["\u25CF", "\u25CB", "\u25A0"]  # ● ○ ■
 
-        for ilvl, char in enumerate(bullet_chars):
+        for ilvl in range(9):
+            char = bullet_chars[ilvl % len(bullet_chars)]
             lvl = OxmlElement("w:lvl")
             lvl.set(qn("w:ilvl"), str(ilvl))
 
@@ -134,8 +135,7 @@ class NumberingManager:
         abstract.append(multi)
 
         formats = ["decimal", "lowerLetter", "lowerRoman"]
-        texts = ["%1.", "%2.", "%3."]
-        for ilvl in range(3):
+        for ilvl in range(9):
             lvl = OxmlElement("w:lvl")
             lvl.set(qn("w:ilvl"), str(ilvl))
 
@@ -144,11 +144,11 @@ class NumberingManager:
             lvl.append(start)
 
             fmt = OxmlElement("w:numFmt")
-            fmt.set(qn("w:val"), formats[ilvl])
+            fmt.set(qn("w:val"), formats[ilvl % len(formats)])
             lvl.append(fmt)
 
             text = OxmlElement("w:lvlText")
-            text.set(qn("w:val"), texts[ilvl])
+            text.set(qn("w:val"), f"%{ilvl + 1}.")
             lvl.append(text)
 
             jc = OxmlElement("w:lvlJc")

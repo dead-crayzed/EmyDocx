@@ -4,6 +4,7 @@ from docx import Document
 from io import BytesIO
 
 from emydocx.converter import markdown_to_docx
+from tests.conftest import list_properties
 
 
 def test_empty_string(settings):
@@ -54,12 +55,12 @@ def test_deeply_nested_list(settings):
     md = "- a\n  - b\n    - c\n      - d\n        - e\n"
     out = markdown_to_docx(md, settings)
     doc = Document(BytesIO(out))
-    list_paras = [p for p in doc.paragraphs if p.style.name == "List Bullet"]
+    list_paras = [p for p in doc.paragraphs if list_properties(doc, p)]
     assert len(list_paras) == 5
-    indents = [p.paragraph_format.left_indent.cm for p in list_paras]
-    # Монотонно возрастает
-    assert indents == sorted(indents)
-    assert len(set(indents)) == 5
+    properties = [list_properties(doc, p) for p in list_paras]
+    assert [prop[1] for prop in properties] == list(range(5))
+    assert [prop[2] for prop in properties] == ["bullet"] * 5
+    assert [prop[3] for prop in properties] == [720, 1440, 2160, 2880, 3600]
 
 
 def test_raw_html_block(settings):

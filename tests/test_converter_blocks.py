@@ -1,7 +1,7 @@
 """Блочная разметка: заголовки, списки, цитаты, код, таблицы."""
 import pytest
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Cm
+from tests.conftest import list_properties
 
 
 # ---------- Заголовки ----------
@@ -41,36 +41,37 @@ def test_paragraph_creates_run(settings, render):
 
 def test_unordered_list(settings, render):
     doc = render("- a\n- b\n- c\n", settings)
-    list_paras = [p for p in doc.paragraphs if p.style.name == "List Bullet"]
+    list_paras = [p for p in doc.paragraphs if list_properties(doc, p)]
     assert len(list_paras) == 3
     assert [p.text for p in list_paras] == ["a", "b", "c"]
+    assert all(list_properties(doc, p)[2] == "bullet" for p in list_paras)
+    assert len({list_properties(doc, p)[0] for p in list_paras}) == 1
 
 
 def test_ordered_list(settings, render):
     doc = render("1. a\n2. b\n", settings)
-    list_paras = [p for p in doc.paragraphs if p.style.name == "List Number"]
+    list_paras = [p for p in doc.paragraphs if list_properties(doc, p)]
     assert len(list_paras) == 2
+    assert all(list_properties(doc, p)[2] == "decimal" for p in list_paras)
 
 
 def test_nested_list_indentation(settings, render):
     md = "- a\n  - b\n    - c\n"
     doc = render(md, settings)
-    list_paras = [p for p in doc.paragraphs if p.style.name == "List Bullet"]
-    indents = [p.paragraph_format.left_indent.cm for p in list_paras]
-    assert len(indents) == 3
-    assert indents[0] < indents[1] < indents[2]
-    assert indents[0] == pytest.approx(0.6, abs=0.01)
-    assert indents[1] == pytest.approx(1.05, abs=0.01)
-    assert indents[2] == pytest.approx(1.5 , abs=0.01)
+    properties = [list_properties(doc, p) for p in doc.paragraphs]
+    assert [prop[1] for prop in properties] == [0, 1, 2]
+    assert [prop[2] for prop in properties] == ["bullet"] * 3
+    assert [prop[3] for prop in properties] == [720, 1440, 2160]
 
 
 def test_mixed_list_styles(settings, render):
     md = "- a\n  1. b\n  2. c\n"
     doc = render(md, settings)
-    bullets = [p for p in doc.paragraphs if p.style.name == "List Bullet"]
-    numbers = [p for p in doc.paragraphs if p.style.name == "List Number"]
-    assert len(bullets) == 1
-    assert len(numbers) == 2
+    properties = [list_properties(doc, p) for p in doc.paragraphs]
+    assert [prop[2] for prop in properties] == ["bullet", "lowerLetter", "lowerLetter"]
+    assert [prop[1] for prop in properties] == [0, 1, 1]
+    assert properties[0][0] != properties[1][0]
+    assert properties[1][0] == properties[2][0]
 
 
 def test_list_item_with_code_block(settings, render):
@@ -91,7 +92,7 @@ def test_blockquote_indent(settings, render):
 def test_blockquote_overrides_list_indent(settings, render):
     """Документируем: цитата перетирает indentation вложенного списка."""
     doc = render("> - a\n> - b\n", settings)
-    list_paras = [p for p in doc.paragraphs if p.style.name == "List Bullet"]
+    list_paras = [p for p in doc.paragraphs if list_properties(doc, p)]
     assert len(list_paras) == 2
     for p in list_paras:
         assert p.paragraph_format.left_indent.cm == pytest.approx(0.7, abs=0.01)

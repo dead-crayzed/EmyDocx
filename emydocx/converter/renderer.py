@@ -110,10 +110,10 @@ class BlockRenderer:
         if pos < len(text):
             self._add_run(paragraph, text[pos:], bold=bold, italic=italic)
 
-    def _add_list(self, block, list_level: int = 0, num_id=None) -> None:
+    def _add_list(self, block, list_level: int = 0, num_id=None, parent_ordered=None) -> None:
         ordered = bool(block.get("attrs", {}).get("ordered", False))
 
-        if num_id is None:
+        if num_id is None or ordered != parent_ordered:
             num_id = (
                 self.numbering.get_number_num_id() if ordered
                 else self.numbering.get_bullet_num_id()
@@ -141,7 +141,7 @@ class BlockRenderer:
                     self._inline_into(paragraph, item_block.get("children", []))
 
                 elif item_kind == "list":
-                    self._add_list(item_block, list_level + 1, num_id)
+                    self._add_list(item_block, list_level + 1, num_id, ordered)
 
                 elif item_kind == "block_code":
                     paragraph = self.document.add_paragraph()
@@ -159,7 +159,7 @@ class BlockRenderer:
         num_pr = OxmlElement("w:numPr")
 
         ilvl_el = OxmlElement("w:ilvl")
-        ilvl_el.set(qn("w:val"), str(ilvl))
+        ilvl_el.set(qn("w:val"), str(min(ilvl, 8)))
         num_pr.append(ilvl_el)
 
         num_id_el = OxmlElement("w:numId")

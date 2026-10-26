@@ -105,7 +105,9 @@ def test_inline_math(settings, render):
 def test_block_math(settings, render):
     doc = render("$$E = mc^2$$", settings)
     para = doc.paragraphs[0]
-    assert "E = mc^2" in para.text
+    assert para.text == "E = mc2"
+    assert para.runs[-1].text == "2"
+    assert para.runs[-1].font.superscript is True
     # Кембрия Math на run'е
     for run in para.runs:
         if run.text.strip():
